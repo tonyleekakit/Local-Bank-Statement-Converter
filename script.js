@@ -208,16 +208,9 @@ async function handleFile(file) {
         const bankType = await identifyBank(pdf);
         const config = loadAPIConfig();
         
-        // 檢查是否已登入（使用 Supabase 認證）
-        let hasAuth = false;
-        if (window.supabase) {
-            const { data: { session } } = await window.supabase.auth.getSession();
-            hasAuth = !!session;
-        }
-        
-        // 檢查 Document AI 配置（現在只需要 projectId 和 processorId，認證在後端處理）
+        // 檢查 Document AI 配置（不需要登入，支持匿名使用）
         const hasDocumentAIConfig = config && config.projectId && config.processorId;
-        const usedDocumentAI = hasAuth && hasDocumentAIConfig;
+        const usedDocumentAI = hasDocumentAIConfig;
         
         // 調試信息
         if (config && config.processorId) {
@@ -225,13 +218,10 @@ async function handleFile(file) {
                 hasConfig: !!config,
                 hasProcessorId: !!config.processorId,
                 hasProjectId: !!config.projectId,
-                hasAuth: hasAuth,
                 canUseDocumentAI: usedDocumentAI
             });
             
-            if (!hasAuth) {
-                console.warn('⚠️ 請先登入以使用 Document AI 功能');
-            } else if (!hasDocumentAIConfig) {
+            if (!hasDocumentAIConfig) {
                 console.warn('⚠️ Document AI 配置不完整，請配置 Project ID 和 Processor ID');
             }
         }
@@ -833,16 +823,6 @@ async function callDocumentAIFormParser(pdf, config) {
         throw new Error('未配置 Project ID');
     }
     
-    // 檢查是否已登入
-    if (!window.supabase) {
-        throw new Error('Supabase 客戶端未初始化。請確保已載入 auth.js');
-    }
-    
-    const { data: { session } } = await window.supabase.auth.getSession();
-    if (!session) {
-        throw new Error('請先登入以使用 Document AI 功能');
-    }
-    
     try {
         // 獲取 PDF 文件
         const fileInput = document.getElementById('fileInput');
@@ -852,8 +832,9 @@ async function callDocumentAIFormParser(pdf, config) {
         
         const file = fileInput.files[0];
         
-        // 構建 Supabase Edge Function URL
-        const supabaseUrl = window.supabase.supabaseUrl;
+        // 構建 Supabase Edge Function URL（支持匿名調用）
+        // 如果 window.supabase 不存在，使用默認的 Supabase URL
+        const supabaseUrl = window.supabase?.supabaseUrl || 'https://sjxzplehoelvzpbrtdhv.supabase.co';
         const edgeFunctionUrl = `${supabaseUrl}/functions/v1/documentai-process`;
         
         console.log('調用 Supabase Edge Function (Document AI)...');
@@ -866,12 +847,29 @@ async function callDocumentAIFormParser(pdf, config) {
         formData.append('location', config.location || 'us');
         formData.append('processorId', config.processorId);
         
-        // 調用 Supabase Edge Function
+        // 構建請求頭（如果已登入，添加 Authorization header；否則匿名調用）
+        const headers = {};
+        if (window.supabase) {
+            try {
+                const { data: { session } } = await window.supabase.auth.getSession();
+                if (session) {
+                    headers['Authorization'] = `Bearer ${session.access_token}`;
+                    console.log('使用已登入用戶身份調用 Document AI');
+                } else {
+                    console.log('使用匿名模式調用 Document AI');
+                }
+            } catch (authError) {
+                // 如果獲取 session 失敗，繼續使用匿名調用
+                console.log('使用匿名模式調用 Document AI（無法檢查登入狀態）');
+            }
+        } else {
+            console.log('使用匿名模式調用 Document AI（Supabase 客戶端未初始化）');
+        }
+        
+        // 調用 Supabase Edge Function（支持匿名調用）
         const response = await fetch(edgeFunctionUrl, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${session.access_token}`,
-            },
+            headers: headers,
             body: formData,
         });
         

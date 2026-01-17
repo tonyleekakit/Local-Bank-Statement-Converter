@@ -70,3 +70,12 @@ coverage/
 *.pid
 *.seed
 *.pid.lock
+
+# 根目錄的舊文件（應該使用 frontend 目錄中的版本）
+/index.html
+/script.js
+/template-engine.js
+/template-loader.js
+/template-configs.js
+/hsbc-template-engine.js
+/templates/
