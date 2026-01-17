@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>銀行月結單PDF轉Excel轉換器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 10px;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .preview-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .preview-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .preview-table tr:hover {
+            background: #f5f5f5;
+        }
+
+        .download-btn {
+            background: #4caf50;
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            margin-top: 20px;
+            display: none;
+            transition: transform 0.2s;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .download-btn.show {
+            display: inline-block;
+        }
+
+        .api-config-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .toggle-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        #apiConfigContent input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏦 銀行月結單PDF轉Excel轉換器</h1>
+        
+        <!-- 認證區域 -->
+        <div id="loginSection" style="margin-bottom: 20px; padding: 20px; background: #f8f9ff; border-radius: 10px;">
+            <h3 style="margin-bottom: 15px; color: #333;">請先登入以使用 Document AI 功能</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="email" id="loginEmail" placeholder="電子郵件" style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <input type="password" id="loginPassword" placeholder="密碼" style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <button id="loginBtn" class="upload-btn" style="flex: 0 0 auto;">登入</button>
+                <button id="signupBtn" class="upload-btn" style="flex: 0 0 auto; background: #4caf50;">註冊</button>
+            </div>
+            <div id="authStatus" style="margin-top: 10px;"></div>
+        </div>
+        
+        <div id="userSection" style="margin-bottom: 20px; padding: 15px; background: #e8f5e9; border-radius: 10px; display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>已登入為：<strong id="userEmail"></strong></span>
+                <button id="logoutBtn" class="upload-btn" style="background: #f44336; padding: 8px 20px; font-size: 0.9em;">登出</button>
+            </div>
+        </div>
+        
+        <div class="upload-area" id="uploadArea">
+            <p style="font-size: 1.2em; margin-bottom: 20px; color: #666;">
+                拖放PDF檔案到此處，或點擊下方按鈕選擇檔案
+            </p>
+            <input type="file" id="fileInput" accept=".pdf">
+            <label for="fileInput" class="upload-btn">選擇PDF檔案</label>
+        </div>
+
+        <!-- Document AI API 配置區域 -->
+        <div class="api-config-section" id="apiConfigSection" style="margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="color: #333; margin: 0;">Document AI 配置（可選）</h3>
+                <button id="toggleConfigBtn" class="toggle-btn" style="background: #667eea; color: white; border: none; padding: 5px 15px; border-radius: 5px; cursor: pointer;">
+                    顯示配置
+                </button>
+            </div>
+            <div id="apiConfigContent" style="display: none; background: #f8f9ff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0;">
+                <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+                    使用 Google Cloud Document AI 可以更準確地識別銀行類型。配置後會優先使用 Document AI，失敗時自動回退到本地識別。
+                    <strong style="color: #4caf50;">認證已由後端安全處理，無需在前端配置憑證。</strong>
+                </p>
+                <details style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 5px;">
+                    <summary style="cursor: pointer; color: #667eea; font-weight: bold; margin-bottom: 5px;">
+                        如何獲取 Document AI 配置信息？
+                    </summary>
+                    <div style="margin-top: 10px; font-size: 0.9em; color: #666; line-height: 1.6;">
+                        <p><strong>步驟 1：創建 Google Cloud 項目</strong></p>
+                        <ol style="margin-left: 20px; margin-bottom: 10px;">
+                            <li>訪問 <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a></li>
+                            <li>創建新項目或選擇現有項目</li>
+                        </ol>
+                        
+                        <p><strong>步驟 2：啟用 Document AI API</strong></p>
+                        <ol style="margin-left: 20px; margin-bottom: 10px;">
+                            <li>在 Cloud Console 中，進入「API 和服務」→「程式庫」</li>
+                            <li>搜索「Document AI API」</li>
+                            <li>點擊「啟用」</li>
+                        </ol>
+                        
+                        <p><strong>步驟 3：創建 Form Parser Processor</strong></p>
+                        <ol style="margin-left: 20px; margin-bottom: 10px;">
+                            <li>進入 Document AI 控制台</li>
+                            <li>創建 Form Parser Processor</li>
+                            <li>記錄 Processor ID</li>
+                        </ol>
+                        
+                        <p style="color: #4caf50; font-weight: bold; margin-top: 10px;">
+                            ✓ 注意：Service Account 憑證已由後端管理，無需在前端配置。
+                        </p>
+                    </div>
+                </details>
+                <div style="margin-bottom: 15px;">
+                    <label for="projectIdInput" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">
+                        項目 ID（Project ID）：
+                    </label>
+                    <input type="text" id="projectIdInput" placeholder="輸入 Google Cloud 項目 ID" 
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 1em;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label for="locationInput" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">
+                        位置（Location）：
+                    </label>
+                    <input type="text" id="locationInput" placeholder="例如：us, eu, asia1" value="us"
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 1em;">
+                    <p style="color: #666; font-size: 0.85em; margin-top: 5px;">
+                        默認：us（美國），可選：eu（歐洲）、asia1（亞洲）
+                    </p>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label for="processorIdInput" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">
+                        Processor ID（處理器 ID）：
+                    </label>
+                    <input type="text" id="processorIdInput" placeholder="輸入 Document AI Form Parser Processor ID" 
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 1em;">
+                    <p style="color: #666; font-size: 0.85em; margin-top: 5px;">
+                        在 Google Cloud Console 創建 Form Parser Processor 後獲取
+                    </p>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="saveConfigBtn" class="upload-btn" style="flex: 1;">保存配置</button>
+                    <button id="clearConfigBtn" class="upload-btn" style="flex: 1; background: #f44336;">清除配置</button>
+                </div>
+                <div id="configStatus" style="margin-top: 10px; padding: 10px; border-radius: 5px; display: none;"></div>
+            </div>
+        </div>
+
+        <div class="status info" id="status" style="display: none;"></div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px;">正在處理PDF...</p>
+        </div>
+
+        <div id="previewContainer" style="display: none;">
+            <h2 style="margin: 20px 0; color: #333;">預覽結果</h2>
+            <table class="preview-table" id="previewTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Details</th>
+                        <th>Deposit</th>
+                        <th>Withdrawal</th>
+                        <th>Balance</th>
+                    </tr>
+                </thead>
+                <tbody id="previewBody">
+                </tbody>
+            </table>
+            <div style="text-align: center;">
+                <button class="download-btn" id="downloadBtn">下載Excel檔案</button>
+                <button class="upload-btn" id="showVisualizationBtn" style="display: none; margin-left: 10px;">顯示框線標記</button>
+                <button class="upload-btn" id="exportBoundariesBtn" style="display: none; margin-left: 10px;">導出框線配置</button>
+            </div>
+        </div>
+        
+        <!-- 框線可視化容器 -->
+        <div id="visualizationContainer" style="display: none; margin-top: 30px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <button class="upload-btn" id="hideVisualizationBtn">隱藏框線標記</button>
+            <div id="pdfViewer" style="overflow: auto; max-height: 800px; border: 2px solid #667eea; border-radius: 10px; background: #f5f5f5; padding: 20px;">
+                <!-- PDF頁面將在這裡渲染 -->
+            </div>
+            <div id="boundariesInfo" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 10px; display: none;">
+                <h3 style="margin-bottom: 10px;">📏 檢測到的框線距離：</h3>
+                <pre id="boundariesText" style="background: white; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF.js 庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- SheetJS 庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Supabase 客戶端 -->
+    <script type="module">
+        import { supabase, signIn, signUp, signOut, initAuth } from './auth.js';
+        
+        // 將 supabase 客戶端暴露到全局，供 script.js 使用
+        window.supabase = supabase;
+        window.authFunctions = { signIn, signUp, signOut };
+        
+        // 確保登入區域在模塊載入時可見（如果未登入）
+        // 如果 auth.js 載入失敗，至少登入區域是可見的
+        const loginSection = document.getElementById('loginSection');
+        const userSection = document.getElementById('userSection');
+        if (loginSection && !userSection?.style.display) {
+            loginSection.style.display = 'block';
+        }
+        
+        // 初始化認證狀態（如果 auth.js 成功載入）
+        (async () => {
+            try {
+                await initAuth();
+            } catch (error) {
+                console.warn('⚠️ 無法初始化認證（可能因為使用 file:// 協議）:', error);
+                // 如果初始化失敗，確保登入區域可見
+                if (loginSection) loginSection.style.display = 'block';
+                if (userSection) userSection.style.display = 'none';
+            }
+        })();
+        
+        // 登入按鈕事件
+        document.getElementById('loginBtn')?.addEventListener('click', async () => {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const authStatus = document.getElementById('authStatus');
+            
+            if (!email || !password) {
+                authStatus.innerHTML = '<span style="color: #f44336;">請填寫電子郵件和密碼</span>';
+                return;
+            }
+            
+            authStatus.innerHTML = '<span style="color: #1976d2;">正在登入...</span>';
+            const { data, error } = await signIn(email, password);
+            
+            if (error) {
+                authStatus.innerHTML = `<span style="color: #f44336;">登入失敗：${error.message}</span>`;
+            } else {
+                authStatus.innerHTML = '<span style="color: #4caf50;">登入成功！</span>';
+                document.getElementById('loginEmail').value = '';
+                document.getElementById('loginPassword').value = '';
+            }
+        });
+        
+        // 註冊按鈕事件
+        document.getElementById('signupBtn')?.addEventListener('click', async () => {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const authStatus = document.getElementById('authStatus');
+            
+            if (!email || !password) {
+                authStatus.innerHTML = '<span style="color: #f44336;">請填寫電子郵件和密碼</span>';
+                return;
+            }
+            
+            if (password.length < 6) {
+                authStatus.innerHTML = '<span style="color: #f44336;">密碼長度至少需要 6 個字符</span>';
+                return;
+            }
+            
+            authStatus.innerHTML = '<span style="color: #1976d2;">正在註冊...</span>';
+            const { data, error } = await signUp(email, password);
+            
+            if (error) {
+                authStatus.innerHTML = `<span style="color: #f44336;">註冊失敗：${error.message}</span>`;
+            } else {
+                authStatus.innerHTML = '<span style="color: #4caf50;">註冊成功！請檢查您的電子郵件以確認帳戶。</span>';
+                document.getElementById('loginEmail').value = '';
+                document.getElementById('loginPassword').value = '';
+            }
+        });
+        
+        // 登出按鈕事件
+        document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+            const { error } = await signOut();
+            if (error) {
+                console.error('登出失敗:', error);
+            }
+        });
+    </script>
+    
+    <!-- 模板載入器（必須最先載入） -->
+    <script src="template-loader.js"></script>
+    <!-- 各個銀行模板配置 -->
+    <script src="templates/hangseng-config.js"></script>
+    <script src="templates/hsbc-config.js"></script>
+    <!-- 模板引擎 -->
+    <script src="template-engine.js"></script>
+    <!-- 匯豐銀行專用模板引擎 -->
+    <script src="hsbc-template-engine.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>
