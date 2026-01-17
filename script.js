@@ -12,12 +12,22 @@ const downloadBtn = document.getElementById('downloadBtn');
 // Document AI 配置相關元素
 const toggleConfigBtn = document.getElementById('toggleConfigBtn');
 const apiConfigContent = document.getElementById('apiConfigContent');
+const apiKeyInput = document.getElementById('apiKeyInput');
 const projectIdInput = document.getElementById('projectIdInput');
 const locationInput = document.getElementById('locationInput');
 const processorIdInput = document.getElementById('processorIdInput');
 const saveConfigBtn = document.getElementById('saveConfigBtn');
 const clearConfigBtn = document.getElementById('clearConfigBtn');
 const configStatus = document.getElementById('configStatus');
+const authMethodRadios = document.querySelectorAll('input[name="authMethod"]');
+const apiKeySection = document.getElementById('apiKeySection');
+const serviceAccountSection = document.getElementById('serviceAccountSection');
+const serviceAccountFileInput = document.getElementById('serviceAccountFileInput');
+const serviceAccountStatus = document.getElementById('serviceAccountStatus');
+const serviceAccountUploadArea = document.getElementById('serviceAccountUploadArea');
+const serviceAccountFileName = document.getElementById('serviceAccountFileName');
+
+let serviceAccountData = null;
 
 let extractedData = [];
 
@@ -43,20 +53,147 @@ const API_CONFIG_KEY = 'documentAI_config';
 function initAPIConfig() {
     const config = loadAPIConfig();
     if (config) {
+        // 設置認證方式
+        const authMethod = config.authMethod || 'apiKey';
+        document.querySelector(`input[name="authMethod"][value="${authMethod}"]`).checked = true;
+        
+        // 切換顯示對應的認證方式區塊
+        if (authMethod === 'apiKey') {
+            apiKeySection.style.display = 'block';
+            serviceAccountSection.style.display = 'none';
+        } else {
+            apiKeySection.style.display = 'none';
+            serviceAccountSection.style.display = 'block';
+        }
+        
+        apiKeyInput.value = config.apiKey || '';
         projectIdInput.value = config.projectId || '';
         locationInput.value = config.location || 'us';
         processorIdInput.value = config.processorId || '';
+        
+        // 如果使用 Service Account，嘗試從 localStorage 載入（但私鑰不會保存）
+        if (authMethod === 'serviceAccount' && config.serviceAccount) {
+            serviceAccountStatus.style.display = 'block';
+            serviceAccountStatus.textContent = `✓ Service Account 已配置: ${config.serviceAccount.client_email}`;
+            // 注意：需要用戶重新上傳 JSON 文件以獲取私鑰
+        }
         
         updateConfigStatus('已載入保存的配置', 'success');
         
         // 顯示配置狀態
         if (config.projectId) {
             console.log('Document AI 配置已載入:', {
+                authMethod: config.authMethod || 'apiKey',
                 projectId: config.projectId,
                 location: config.location,
-                processorId: config.processorId ? '已配置' : '未配置'
+                processorId: config.processorId ? '已配置' : '未配置',
+                hasApiKey: !!config.apiKey,
+                hasServiceAccount: !!config.serviceAccount
             });
         }
+    }
+    
+    // 認證方式切換
+    authMethodRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'apiKey') {
+                apiKeySection.style.display = 'block';
+                serviceAccountSection.style.display = 'none';
+            } else {
+                apiKeySection.style.display = 'none';
+                serviceAccountSection.style.display = 'block';
+            }
+        });
+    });
+    
+    // Service Account 文件讀取函數
+    async function handleServiceAccountFile(file) {
+        if (!file) return;
+        
+        if (!file.name.endsWith('.json')) {
+            updateConfigStatus('請選擇 JSON 格式的文件', 'error');
+            return;
+        }
+        
+        try {
+            const text = await file.text();
+            serviceAccountData = JSON.parse(text);
+            
+            // 驗證 Service Account JSON 格式
+            if (!serviceAccountData.client_email || !serviceAccountData.private_key || !serviceAccountData.project_id) {
+                throw new Error('無效的 Service Account JSON 格式。文件必須包含 client_email、private_key 和 project_id');
+            }
+            
+            // 自動填充 Project ID
+            if (!projectIdInput.value) {
+                projectIdInput.value = serviceAccountData.project_id;
+            }
+            
+            // 立即保存到 window.serviceAccountData，以便後續使用
+            window.serviceAccountData = serviceAccountData;
+            
+            // 更新 UI
+            serviceAccountFileName.style.display = 'block';
+            serviceAccountFileName.innerHTML = `✓ 已選擇文件：<strong>${file.name}</strong>`;
+            serviceAccountStatus.style.display = 'block';
+            serviceAccountStatus.textContent = `✓ Service Account 已加載: ${serviceAccountData.client_email}`;
+            
+            // 更新上傳區域樣式
+            serviceAccountUploadArea.style.borderColor = '#4caf50';
+            serviceAccountUploadArea.style.background = '#e8f5e9';
+            serviceAccountUploadArea.querySelector('p').style.color = '#4caf50';
+            
+            console.log('Service Account 已加載並保存到 window.serviceAccountData:', serviceAccountData.client_email);
+            updateConfigStatus('Service Account 文件已成功加載', 'success');
+        } catch (error) {
+            console.error('讀取 Service Account 文件失敗:', error);
+            updateConfigStatus('讀取 Service Account 文件失敗: ' + error.message, 'error');
+            serviceAccountData = null;
+            serviceAccountStatus.style.display = 'none';
+            serviceAccountFileName.style.display = 'none';
+            
+            // 重置上傳區域樣式
+            serviceAccountUploadArea.style.borderColor = '#f44336';
+            serviceAccountUploadArea.style.background = '#ffebee';
+            serviceAccountUploadArea.querySelector('p').style.color = '#f44336';
+        }
+    }
+    
+    // Service Account 文件選擇事件
+    serviceAccountFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        await handleServiceAccountFile(file);
+    });
+    
+    // 拖放功能
+    if (serviceAccountUploadArea) {
+        serviceAccountUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            serviceAccountUploadArea.style.borderColor = '#667eea';
+            serviceAccountUploadArea.style.background = '#e3f2fd';
+        });
+        
+        serviceAccountUploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!serviceAccountData) {
+                serviceAccountUploadArea.style.borderColor = '#f44336';
+                serviceAccountUploadArea.style.background = '#ffebee';
+            }
+        });
+        
+        serviceAccountUploadArea.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.json')) {
+                serviceAccountFileInput.files = e.dataTransfer.files;
+                await handleServiceAccountFile(file);
+            } else {
+                updateConfigStatus('請拖放 JSON 格式的文件', 'error');
+            }
+        });
     }
     
     // 配置切換按鈕
@@ -68,7 +205,10 @@ function initAPIConfig() {
     
     // 保存配置
     saveConfigBtn.addEventListener('click', () => {
+        const selectedAuthMethod = document.querySelector('input[name="authMethod"]:checked').value;
         const config = {
+            authMethod: selectedAuthMethod,
+            apiKey: selectedAuthMethod === 'apiKey' ? apiKeyInput.value.trim() : '',
             projectId: projectIdInput.value.trim(),
             location: locationInput.value.trim() || 'us',
             processorId: processorIdInput.value.trim()
@@ -79,16 +219,43 @@ function initAPIConfig() {
             return;
         }
         
+        if (selectedAuthMethod === 'apiKey' && !config.apiKey) {
+            updateConfigStatus('請填寫 API 密鑰', 'error');
+            return;
+        }
+        
+        if (selectedAuthMethod === 'serviceAccount' && !serviceAccountData) {
+            updateConfigStatus('請上傳 Service Account JSON 文件', 'error');
+            return;
+        }
+        
+        // 保存 Service Account 數據（僅保存必要信息，不保存私鑰到 localStorage）
+        if (selectedAuthMethod === 'serviceAccount' && serviceAccountData) {
+            config.serviceAccount = {
+                client_email: serviceAccountData.client_email,
+                project_id: serviceAccountData.project_id,
+                // 注意：私鑰會保存在內存中，不會持久化到 localStorage
+            };
+        }
+        
         saveAPIConfig(config);
+        
+        // 如果使用 Service Account，將完整數據保存在內存中
+        if (selectedAuthMethod === 'serviceAccount' && serviceAccountData) {
+            window.serviceAccountData = serviceAccountData;
+        }
         
         const message = config.processorId 
             ? '配置已保存！下次上傳 PDF 時將使用 Document AI Form Parser'
             : '配置已保存！下次上傳 PDF 時將使用 Document AI 識別（未配置 Processor ID，無法使用表格可視化）';
         updateConfigStatus(message, 'success');
         console.log('Document AI 配置已保存:', {
+            authMethod: config.authMethod,
             projectId: config.projectId,
             location: config.location,
-            processorId: config.processorId ? '已配置' : '未配置'
+            processorId: config.processorId ? '已配置' : '未配置',
+            hasApiKey: !!config.apiKey,
+            hasServiceAccount: !!config.serviceAccount
         });
     });
     
@@ -96,9 +263,24 @@ function initAPIConfig() {
     clearConfigBtn.addEventListener('click', () => {
         if (confirm('確定要清除配置嗎？')) {
             clearAPIConfig();
+            apiKeyInput.value = '';
             projectIdInput.value = '';
             locationInput.value = 'us';
             processorIdInput.value = '';
+            serviceAccountFileInput.value = '';
+            serviceAccountData = null;
+            window.serviceAccountData = null;
+            serviceAccountStatus.style.display = 'none';
+            serviceAccountFileName.style.display = 'none';
+            
+            // 重置上傳區域樣式
+            if (serviceAccountUploadArea) {
+                serviceAccountUploadArea.style.borderColor = '#f44336';
+                serviceAccountUploadArea.style.background = '#ffebee';
+                const uploadText = serviceAccountUploadArea.querySelector('p');
+                if (uploadText) uploadText.style.color = '#f44336';
+            }
+            
             updateConfigStatus('配置已清除', 'info');
         }
     });
@@ -208,16 +390,13 @@ async function handleFile(file) {
         const bankType = await identifyBank(pdf);
         const config = loadAPIConfig();
         
-        // 檢查是否已登入（使用 Supabase 認證）
-        let hasAuth = false;
-        if (window.supabase) {
-            const { data: { session } } = await window.supabase.auth.getSession();
-            hasAuth = !!session;
-        }
-        
-        // 檢查 Document AI 配置（現在只需要 projectId 和 processorId，認證在後端處理）
-        const hasDocumentAIConfig = config && config.projectId && config.processorId;
-        const usedDocumentAI = hasAuth && hasDocumentAIConfig;
+        // 檢查是否有有效的認證方式
+        const hasAuth = config && config.projectId && (
+            (config.authMethod === 'serviceAccount' && (window.serviceAccountData || serviceAccountData)) ||
+            (config.authMethod === 'apiKey' && config.apiKey) ||
+            (!config.authMethod && config.apiKey) // 向後兼容舊配置
+        );
+        const usedDocumentAI = hasAuth;
         
         // 調試信息
         if (config && config.processorId) {
@@ -225,14 +404,18 @@ async function handleFile(file) {
                 hasConfig: !!config,
                 hasProcessorId: !!config.processorId,
                 hasProjectId: !!config.projectId,
-                hasAuth: hasAuth,
-                canUseDocumentAI: usedDocumentAI
+                authMethod: config.authMethod,
+                hasServiceAccount: !!(window.serviceAccountData || serviceAccountData),
+                hasApiKey: !!config.apiKey,
+                hasAuth: hasAuth
             });
             
             if (!hasAuth) {
-                console.warn('⚠️ 請先登入以使用 Document AI 功能');
-            } else if (!hasDocumentAIConfig) {
-                console.warn('⚠️ Document AI 配置不完整，請配置 Project ID 和 Processor ID');
+                console.warn('⚠️ Document AI 配置不完整，無法調用 Form Parser:', {
+                    reason: config.authMethod === 'serviceAccount' 
+                        ? 'Service Account 數據未找到（請重新上傳 JSON 文件並點擊保存配置）'
+                        : 'API Key 未配置'
+                });
             }
         }
         
@@ -257,14 +440,16 @@ async function handleFile(file) {
             console.log('未能識別銀行類型，使用默認模板（恒生銀行）');
         }
         
-        // 如果配置了 Processor ID 且已登入，調用 Document AI Form Parser 並可視化表格
+        // 如果配置了 Processor ID，調用 Document AI Form Parser 並可視化表格
         let documentAIResult = null;
-        if (usedDocumentAI) {
+        if (config && config.processorId && config.projectId && hasAuth) {
             try {
                 console.log('準備調用 Document AI Form Parser...', {
                     processorId: config.processorId,
                     projectId: config.projectId,
-                    location: config.location || 'us'
+                    authMethod: config.authMethod,
+                    hasServiceAccount: !!(window.serviceAccountData || serviceAccountData),
+                    hasApiKey: !!config.apiKey
                 });
                 showStatus('正在調用 Document AI Form Parser...', 'info');
                 documentAIResult = await callDocumentAIFormParser(pdf, config);
@@ -279,59 +464,21 @@ async function handleFile(file) {
                     console.log('✅ Document AI 表格可視化已完成');
                 }
             } catch (error) {
-                console.error('❌ Document AI Form Parser 調用失敗:', error);
+                console.warn('Document AI Form Parser 調用失敗:', error);
                 const errorMsg = error.message || '未知錯誤';
                 
-                // 根據錯誤類型提供更詳細的提示
-                let userMessage = `⚠️ Document AI 調用失敗: ${errorMsg}`;
-                let helpMessage = '';
+                // 顯示詳細錯誤信息
+                showStatus(`⚠️ Document AI 調用失敗: ${errorMsg}\n\n繼續使用本地提取方法`, 'error');
                 
-                if (errorMsg.includes('401') || errorMsg.includes('認證失敗') || errorMsg.includes('未授權')) {
-                    userMessage = '⚠️ 認證失敗：請確保您已登入';
-                    helpMessage = '📌 認證問題提示：\n' +
-                        '1. 請確保您已登入 Supabase 帳號\n' +
-                        '2. 檢查瀏覽器的登入狀態\n' +
-                        '3. 如果問題持續，請嘗試重新登入';
-                } else if (errorMsg.includes('404') || errorMsg.includes('未找到')) {
-                    userMessage = '⚠️ Processor ID 不正確或資源未找到';
-                    helpMessage = '📌 配置問題提示：\n' +
-                        '1. 檢查 Processor ID 是否正確\n' +
-                        '2. 確認 Project ID 和 Location 是否正確\n' +
-                        '3. 確認該 Processor 是否存在並已啟用';
-                } else if (errorMsg.includes('403') || errorMsg.includes('權限不足')) {
-                    userMessage = '⚠️ 權限不足：您沒有使用此功能的權限';
-                    helpMessage = '📌 權限問題提示：\n' +
-                        '1. 檢查您的帳號是否有權限使用 Document AI\n' +
-                        '2. 確認 Service Account 是否已配置\n' +
-                        '3. 聯繫管理員檢查權限設置';
-                } else if (errorMsg.includes('500') || errorMsg.includes('伺服器錯誤')) {
-                    userMessage = '⚠️ 伺服器錯誤：後端服務暫時不可用';
-                    helpMessage = '📌 服務問題提示：\n' +
-                        '1. 檢查 Service Account 配置是否正確\n' +
-                        '2. 確認 Google Cloud 服務是否正常\n' +
-                        '3. 稍後再試';
-                } else if (errorMsg.includes('未配置')) {
-                    userMessage = '⚠️ 配置缺失：請配置必要的參數';
-                    helpMessage = '📌 配置問題提示：\n' +
-                        '1. 請在配置中填寫 Project ID\n' +
-                        '2. 請填寫 Processor ID\n' +
-                        '3. 選擇正確的 Location（如 us、asia 等）';
+                // 如果是 401 錯誤，提供更多幫助信息
+                if (errorMsg.includes('401') || errorMsg.includes('認證失敗')) {
+                    console.warn('📌 認證問題提示：');
+                    console.warn('Document AI Form Parser 通常需要使用服務帳戶憑證（Service Account JSON），');
+                    console.warn('而不是前端 API Key。如果必須在前端使用，需要：');
+                    console.warn('1. 確保 API Key 已啟用 Document AI API');
+                    console.warn('2. 確保 API Key 有訪問該 Processor 的權限');
+                    console.warn('3. 或者使用後端代理服務來處理認證');
                 }
-                
-                // 顯示錯誤信息
-                showStatus(userMessage + '\n\n繼續使用本地提取方法', 'error');
-                
-                // 在控制台輸出詳細幫助信息
-                if (helpMessage) {
-                    console.warn(helpMessage);
-                }
-                
-                // 輸出完整錯誤對象（用於調試）
-                console.error('錯誤詳情:', {
-                    message: error.message,
-                    stack: error.stack,
-                    name: error.name
-                });
             }
         }
         
@@ -758,12 +905,8 @@ async function identifyBank(pdf) {
     
     // 如果配置了 Document AI，優先使用
     if (config && config.projectId) {
-        // 檢查是否已登入（認證在後端處理）
-        let hasAuth = false;
-        if (window.supabase) {
-            const { data: { session } } = await window.supabase.auth.getSession();
-            hasAuth = !!session;
-        }
+        const hasAuth = (config.authMethod === 'serviceAccount' && window.serviceAccountData) || 
+                       (config.authMethod === 'apiKey' && config.apiKey);
         
         if (hasAuth) {
             try {
@@ -822,7 +965,64 @@ async function identifyBankWithDocumentAI(pdf, config) {
     }
 }
 
-// 調用 Document AI Form Parser API（通過 Supabase Edge Function）
+// 使用 Service Account 生成 JWT
+function generateServiceAccountJWT(serviceAccount) {
+    const now = Math.floor(Date.now() / 1000);
+    const header = {
+        alg: 'RS256',
+        typ: 'JWT'
+    };
+    
+    const payload = {
+        iss: serviceAccount.client_email,
+        sub: serviceAccount.client_email,
+        aud: 'https://oauth2.googleapis.com/token',
+        iat: now,
+        exp: now + 3600, // 1小時有效期
+        scope: 'https://www.googleapis.com/auth/cloud-platform'
+    };
+    
+    const headerB64 = btoa(JSON.stringify(header)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const payloadB64 = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const unsignedJWT = `${headerB64}.${payloadB64}`;
+    
+    // 使用 jsrsasign 簽名 JWT
+    const privateKey = serviceAccount.private_key.replace(/\\n/g, '\n');
+    const signature = KJUR.crypto.Sign.signJWT(unsignedJWT, privateKey, 'RS256');
+    
+    return signature;
+}
+
+// 使用 Service Account JWT 獲取訪問令牌
+async function getAccessTokenFromServiceAccount(serviceAccount) {
+    try {
+        const jwt = generateServiceAccountJWT(serviceAccount);
+        
+        const response = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion: jwt
+            })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`獲取訪問令牌失敗: ${response.status} - ${errorText}`);
+        }
+        
+        const data = await response.json();
+        return data.access_token;
+    } catch (error) {
+        console.error('Service Account 認證失敗:', error);
+        throw error;
+    }
+}
+
+// 調用 Document AI Form Parser API
 // 返回完整的 Document AI 結果，包含表格座標信息
 async function callDocumentAIFormParser(pdf, config) {
     if (!config.processorId) {
@@ -833,108 +1033,110 @@ async function callDocumentAIFormParser(pdf, config) {
         throw new Error('未配置 Project ID');
     }
     
-    // 檢查是否已登入
-    if (!window.supabase) {
-        throw new Error('Supabase 客戶端未初始化。請確保已載入 auth.js');
-    }
-    
-    const { data: { session } } = await window.supabase.auth.getSession();
-    if (!session) {
-        throw new Error('請先登入以使用 Document AI 功能');
+    // 獲取訪問令牌
+    let accessToken = null;
+    if (config.authMethod === 'serviceAccount') {
+        // 使用 Service Account
+        const serviceAccount = window.serviceAccountData || serviceAccountData;
+        console.log('查找 Service Account 數據:', {
+            hasWindowData: !!window.serviceAccountData,
+            hasLocalData: !!serviceAccountData,
+            found: !!serviceAccount
+        });
+        
+        if (!serviceAccount) {
+            throw new Error('未找到 Service Account 數據。請確保：\n1. 已上傳 Service Account JSON 文件\n2. 已點擊「保存配置」按鈕\n3. 如果頁面已刷新，請重新上傳 JSON 文件');
+        }
+        
+        console.log('使用 Service Account 認證...', {
+            client_email: serviceAccount.client_email,
+            project_id: serviceAccount.project_id
+        });
+        accessToken = await getAccessTokenFromServiceAccount(serviceAccount);
+        console.log('✓ 訪問令牌獲取成功');
+    } else {
+        // 使用 API Key
+        if (!config.apiKey) {
+            throw new Error('未配置 API Key');
+        }
+        accessToken = config.apiKey;
     }
     
     try {
-        // 獲取 PDF 文件
+        // 將 PDF 轉換為 base64
+        // 注意：需要從原始文件獲取，而不是從 pdf.js 對象
         const fileInput = document.getElementById('fileInput');
         if (!fileInput || !fileInput.files || !fileInput.files[0]) {
             throw new Error('無法獲取 PDF 文件');
         }
         
         const file = fileInput.files[0];
+        const arrayBuffer = await file.arrayBuffer();
         
-        // 構建 Supabase Edge Function URL
-        const supabaseUrl = window.supabase.supabaseUrl;
-        const edgeFunctionUrl = `${supabaseUrl}/functions/v1/documentai-process`;
+        // 將 ArrayBuffer 轉換為 base64
+        const bytes = new Uint8Array(arrayBuffer);
+        const binary = bytes.reduce((acc, byte) => acc + String.fromCharCode(byte), '');
+        const base64Pdf = btoa(binary);
         
-        console.log('調用 Supabase Edge Function (Document AI)...');
+        // 構建 API URL
+        const apiUrl = `https://${config.location}-documentai.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/processors/${config.processorId}:process`;
+        
+        console.log('調用 Document AI Form Parser API...');
         showStatus('正在調用 Document AI Form Parser...', 'info');
         
-        // 準備 FormData
-        const formData = new FormData();
-        formData.append('pdf', file);
-        formData.append('projectId', config.projectId);
-        formData.append('location', config.location || 'us');
-        formData.append('processorId', config.processorId);
-        
-        // 調用 Supabase Edge Function
-        const response = await fetch(edgeFunctionUrl, {
+        // 調用 API
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${session.access_token}`,
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
             },
-            body: formData,
+            body: JSON.stringify({
+                rawDocument: {
+                    content: base64Pdf,
+                    mimeType: 'application/pdf'
+                }
+            })
         });
         
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: '未知錯誤' }));
+            const errorText = await response.text();
             let errorMessage = `Document AI API 錯誤 (${response.status})`;
             
+            // 根據狀態碼提供更具體的信息
             if (response.status === 401) {
-                errorMessage = '認證失敗 (401)：請確保您已登入並有權限使用此功能';
+                if (config.authMethod === 'serviceAccount') {
+                    errorMessage = '認證失敗 (401)：Service Account 憑證無效或沒有權限。\n' +
+                        '請確保：\n' +
+                        '1. Service Account JSON 文件是有效的\n' +
+                        '2. Service Account 已啟用 Document AI API\n' +
+                        '3. Service Account 有訪問該 Processor 的權限';
+                } else {
+                    errorMessage = '認證失敗 (401)：API Key 無效或沒有權限。\n' +
+                        '注意：Document AI 通常需要服務帳戶憑證（Service Account），而不是 API Key。\n' +
+                        '請確保：\n' +
+                        '1. API Key 是有效的\n' +
+                        '2. API Key 已啟用 Document AI API\n' +
+                        '3. 或者使用服務帳戶 JSON 文件';
+                }
             } else if (response.status === 403) {
-                errorMessage = '權限不足 (403)：您沒有權限使用此功能';
+                errorMessage = '權限不足 (403)：憑證沒有訪問此資源的權限';
             } else if (response.status === 404) {
                 errorMessage = '資源未找到 (404)：Processor ID 可能不正確';
-            } else if (errorData.error) {
-                errorMessage = errorData.error;
             }
             
             console.error('API 錯誤詳情:', {
                 status: response.status,
                 statusText: response.statusText,
-                errorBody: errorData
+                errorBody: errorText
             });
             
             throw new Error(errorMessage);
         }
         
         const result = await response.json();
-        
-        // 調試：輸出完整的響應數據
         console.log('✅ Document AI Form Parser 調用成功');
-        console.log('完整響應結構:', {
-            hasSuccess: 'success' in result,
-            hasDocument: !!result.document,
-            documentPages: result.document?.pages?.length || 0,
-            firstPageTables: result.document?.pages?.[0]?.tables?.length || 0
-        });
-        
-        // 驗證響應格式
-        if (!result.success) {
-            console.warn('⚠️ Edge Function 返回 success: false');
-        }
-        
-        if (!result.document) {
-            console.warn('⚠️ Edge Function 響應中缺少 document 屬性');
-        } else {
-            // 輸出表格統計信息
-            const totalTables = result.document.pages?.reduce((sum, page) => 
-                sum + (page.tables?.length || 0), 0) || 0;
-            console.log(`📊 檢測到 ${totalTables} 個表格（跨 ${result.document.pages?.length || 0} 頁）`);
-            
-            // 詳細表格信息
-            result.document.pages?.forEach((page, pageIndex) => {
-                const pageTables = page.tables?.length || 0;
-                if (pageTables > 0) {
-                    console.log(`  第 ${pageIndex + 1} 頁: ${pageTables} 個表格`);
-                    page.tables?.forEach((table, tableIndex) => {
-                        const headerRows = table.headerRows?.length || 0;
-                        const bodyRows = table.bodyRows?.length || 0;
-                        console.log(`    表格 ${tableIndex + 1}: ${headerRows} 行標題, ${bodyRows} 行數據`);
-                    });
-                }
-            });
-        }
+        console.log('檢測到的表格數量:', result.document?.pages?.[0]?.tables?.length || 0);
         
         return result;
     } catch (error) {
@@ -2042,22 +2244,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // documentAIResult: Document AI API 回傳的 JSON 對象
 // pdf: PDF.js 的 PDF 對象
 async function visualizeDocumentAITables(pdf, documentAIResult) {
-    if (!documentAIResult) {
-        console.error('❌ Document AI 結果為空');
-        showStatus('⚠️ 無法可視化：Document AI 結果為空', 'error');
-        return;
-    }
-    
-    if (!documentAIResult.document) {
-        console.error('❌ Document AI 結果中缺少 document 屬性');
-        console.error('響應結構:', Object.keys(documentAIResult));
-        showStatus('⚠️ 無法可視化：Document AI 響應格式不正確', 'error');
-        return;
-    }
-    
-    if (!documentAIResult.document.pages || documentAIResult.document.pages.length === 0) {
-        console.error('❌ Document AI 結果中沒有頁面數據');
-        showStatus('⚠️ 無法可視化：Document AI 未檢測到頁面', 'error');
+    if (!documentAIResult || !documentAIResult.document || !documentAIResult.document.pages) {
+        console.error('Document AI 結果無效或沒有頁面數據');
         return;
     }
     
@@ -2075,16 +2263,6 @@ async function visualizeDocumentAITables(pdf, documentAIResult) {
     
     // 解析 Document AI 結果，提取表格信息
     const tablesByPage = parseDocumentAITables(documentAIResult);
-    
-    // 檢查是否有表格
-    const totalTables = Object.values(tablesByPage).reduce((sum, tables) => sum + tables.length, 0);
-    if (totalTables === 0) {
-        console.warn('⚠️ Document AI 未檢測到任何表格');
-        showStatus('⚠️ Document AI 未檢測到表格（PDF 中可能沒有表格）', 'info');
-        // 仍然顯示 PDF 預覽，但不繪製表格框線
-    } else {
-        console.log(`✅ 將可視化 ${totalTables} 個表格`);
-    }
     
     // 渲染所有頁面並繪製表格
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -2145,23 +2323,9 @@ async function visualizeDocumentAITables(pdf, documentAIResult) {
 function parseDocumentAITables(documentAIResult) {
     const tablesByPage = {};
     
-    if (!documentAIResult || !documentAIResult.document) {
-        console.error('parseDocumentAITables: documentAIResult 無效');
-        return tablesByPage;
-    }
-    
-    console.log('📋 開始解析 Document AI 表格數據...');
-    
     documentAIResult.document?.pages?.forEach((page, pageIndex) => {
         const pageNumber = pageIndex + 1;
         const tables = [];
-        
-        if (!page.tables || page.tables.length === 0) {
-            console.log(`  第 ${pageNumber} 頁: 無表格`);
-            return;
-        }
-        
-        console.log(`  第 ${pageNumber} 頁: 找到 ${page.tables.length} 個表格`);
         
         page.tables?.forEach((table, tableIndex) => {
             // 提取整個表格的邊界框
@@ -2199,12 +2363,6 @@ function parseDocumentAITables(documentAIResult) {
                 };
             }) || [];
             
-            // 統計單元格數量
-            const headerCellCount = headerRows.reduce((sum, row) => sum + (row.cells?.length || 0), 0);
-            const bodyCellCount = bodyRows.reduce((sum, row) => sum + (row.cells?.length || 0), 0);
-            
-            console.log(`    表格 ${tableIndex + 1}: ${headerRows.length} 行標題 (${headerCellCount} 單元格), ${bodyRows.length} 行數據 (${bodyCellCount} 單元格)`);
-            
             tables.push({
                 tableIndex,
                 tableBounds,
@@ -2218,9 +2376,6 @@ function parseDocumentAITables(documentAIResult) {
             tablesByPage[pageNumber] = tables;
         }
     });
-    
-    const totalTables = Object.values(tablesByPage).reduce((sum, tables) => sum + tables.length, 0);
-    console.log(`✅ 解析完成: 共 ${totalTables} 個表格，分布在 ${Object.keys(tablesByPage).length} 頁`);
     
     return tablesByPage;
 }
@@ -2257,30 +2412,11 @@ function extractBounds(boundingPoly, pageDimension) {
 
 // 獲取單元格的文本內容
 function getCellText(cell) {
-    // 方法1: 嘗試從 layout.textAnchor.textSegments 獲取文本
+    // 嘗試從 textAnchor 獲取文本
     const textSegments = cell.layout?.textAnchor?.textSegments;
     if (textSegments && textSegments.length > 0) {
-        const text = textSegments.map(seg => seg.text || '').filter(t => t.trim()).join(' ').trim();
-        if (text) return text;
+        return textSegments.map(seg => seg.text || '').join(' ');
     }
-    
-    // 方法2: 嘗試從 textLayout.textAnchor 獲取（某些 Document AI 版本）
-    const textLayoutSegments = cell.textLayout?.textAnchor?.textSegments;
-    if (textLayoutSegments && textLayoutSegments.length > 0) {
-        const text = textLayoutSegments.map(seg => seg.text || '').filter(t => t.trim()).join(' ').trim();
-        if (text) return text;
-    }
-    
-    // 方法3: 直接從 cell 對象查找 text 屬性
-    if (cell.text) {
-        return String(cell.text).trim();
-    }
-    
-    // 方法4: 嘗試從其他可能的屬性獲取
-    if (cell.value) {
-        return String(cell.value).trim();
-    }
-    
     return '';
 }
 
@@ -2363,38 +2499,19 @@ function drawCell(context, bounds, fillColor, borderColor, textColor, text, view
     context.strokeRect(canvasX1, canvasY1, canvasWidth, canvasHeight);
     
     // 繪製單元格文本（如果空間足夠）
-    if (text && text.trim() && canvasHeight > 12) {
-        const trimmedText = text.trim();
+    if (text && canvasHeight > 12) {
         context.fillStyle = textColor;
-        // 根據單元格高度動態調整字體大小
-        const fontSize = Math.max(8, Math.min(12, Math.floor(canvasHeight * 0.4)));
-        context.font = `${fontSize}px Arial`;
+        context.font = '10px Arial';
         context.textBaseline = 'top';
         
         // 限制文本寬度
-        const maxWidth = canvasWidth - 6;
-        const textMetrics = context.measureText(trimmedText);
+        const maxWidth = canvasWidth - 4;
+        const textMetrics = context.measureText(text);
+        const truncatedText = textMetrics.width > maxWidth 
+            ? text.substring(0, Math.floor(text.length * maxWidth / textMetrics.width)) + '...'
+            : text;
         
-        let displayText = trimmedText;
-        if (textMetrics.width > maxWidth) {
-            // 智能截斷：嘗試找到合適的截斷點
-            let truncated = '';
-            for (let i = 0; i < trimmedText.length; i++) {
-                const testText = trimmedText.substring(0, i + 1) + '...';
-                if (context.measureText(testText).width > maxWidth) {
-                    break;
-                }
-                truncated = testText;
-            }
-            displayText = truncated || trimmedText.substring(0, 10) + '...';
-        }
-        
-        // 垂直居中（如果空間足夠）
-        const textY = canvasHeight > fontSize * 1.5 
-            ? canvasY1 + (canvasHeight - fontSize) / 2
-            : canvasY1 + 2;
-        
-        context.fillText(displayText, canvasX1 + 3, textY);
+        context.fillText(truncatedText, canvasX1 + 2, canvasY1 + 2);
     }
 }
 
