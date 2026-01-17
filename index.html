@@ -191,6 +191,25 @@
     <div class="container">
         <h1>🏦 銀行月結單PDF轉Excel轉換器</h1>
         
+        <!-- 認證區域 -->
+        <div id="loginSection" style="margin-bottom: 20px; padding: 20px; background: #f8f9ff; border-radius: 10px;">
+            <h3 style="margin-bottom: 15px; color: #333;">請先登入以使用 Document AI 功能</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="email" id="loginEmail" placeholder="電子郵件" style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <input type="password" id="loginPassword" placeholder="密碼" style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <button id="loginBtn" class="upload-btn" style="flex: 0 0 auto;">登入</button>
+                <button id="signupBtn" class="upload-btn" style="flex: 0 0 auto; background: #4caf50;">註冊</button>
+            </div>
+            <div id="authStatus" style="margin-top: 10px;"></div>
+        </div>
+        
+        <div id="userSection" style="margin-bottom: 20px; padding: 15px; background: #e8f5e9; border-radius: 10px; display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>已登入為：<strong id="userEmail"></strong></span>
+                <button id="logoutBtn" class="upload-btn" style="background: #f44336; padding: 8px 20px; font-size: 0.9em;">登出</button>
+            </div>
+        </div>
+        
         <div class="upload-area" id="uploadArea">
             <p style="font-size: 1.2em; margin-bottom: 20px; color: #666;">
                 拖放PDF檔案到此處，或點擊下方按鈕選擇檔案
@@ -210,10 +229,11 @@
             <div id="apiConfigContent" style="display: none; background: #f8f9ff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0;">
                 <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
                     使用 Google Cloud Document AI 可以更準確地識別銀行類型。配置後會優先使用 Document AI，失敗時自動回退到本地識別。
+                    <strong style="color: #4caf50;">認證已由後端安全處理，無需在前端配置憑證。</strong>
                 </p>
                 <details style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 5px;">
                     <summary style="cursor: pointer; color: #667eea; font-weight: bold; margin-bottom: 5px;">
-                        如何獲取 API 憑證？
+                        如何獲取 Document AI 配置信息？
                     </summary>
                     <div style="margin-top: 10px; font-size: 0.9em; color: #666; line-height: 1.6;">
                         <p><strong>步驟 1：創建 Google Cloud 項目</strong></p>
@@ -229,80 +249,18 @@
                             <li>點擊「啟用」</li>
                         </ol>
                         
-                        <p><strong>步驟 3：創建服務帳戶</strong></p>
+                        <p><strong>步驟 3：創建 Form Parser Processor</strong></p>
                         <ol style="margin-left: 20px; margin-bottom: 10px;">
-                            <li>進入「API 和服務」→「憑證」</li>
-                            <li>點擊「建立憑證」→「服務帳戶」</li>
-                            <li>填寫服務帳戶名稱，點擊「建立並繼續」</li>
-                            <li>授予「Document AI API User」角色</li>
-                            <li>點擊「完成」</li>
+                            <li>進入 Document AI 控制台</li>
+                            <li>創建 Form Parser Processor</li>
+                            <li>記錄 Processor ID</li>
                         </ol>
                         
-                        <p><strong>步驟 4：創建 API 金鑰（用於前端）</strong></p>
-                        <ol style="margin-left: 20px; margin-bottom: 10px;">
-                            <li>在「憑證」頁面，點擊「建立憑證」→「API 金鑰」</li>
-                            <li>複製生成的 API 金鑰</li>
-                            <li>（可選）限制 API 金鑰僅用於 Document AI API</li>
-                        </ol>
-                        
-                        <p style="color: #f44336; font-weight: bold; margin-top: 10px;">
-                            ⚠️ 注意：由於安全限制，Document AI 通常需要服務帳戶憑證，不適合直接在前端使用 API 金鑰。
-                            建議使用後端代理或使用本地識別功能。
+                        <p style="color: #4caf50; font-weight: bold; margin-top: 10px;">
+                            ✓ 注意：Service Account 憑證已由後端管理，無需在前端配置。
                         </p>
                     </div>
                 </details>
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">
-                        認證方式：
-                    </label>
-                    <div style="margin-bottom: 10px;">
-                        <label style="display: inline-flex; align-items: center; margin-right: 20px; cursor: pointer;">
-                            <input type="radio" name="authMethod" value="apiKey" checked style="margin-right: 5px;">
-                            API 密鑰
-                        </label>
-                        <label style="display: inline-flex; align-items: center; cursor: pointer;">
-                            <input type="radio" name="authMethod" value="serviceAccount" style="margin-right: 5px;">
-                            Service Account JSON
-                        </label>
-                    </div>
-                </div>
-                <div id="apiKeySection" style="margin-bottom: 15px;">
-                    <label for="apiKeyInput" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">
-                        API 密鑰：
-                    </label>
-                    <input type="password" id="apiKeyInput" placeholder="輸入 Google Cloud API 密鑰" 
-                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 1em;">
-                    <p style="color: #666; font-size: 0.85em; margin-top: 5px;">
-                        密鑰會保存在瀏覽器本地，不會上傳到任何服務器
-                    </p>
-                </div>
-                <div id="serviceAccountSection" style="margin-bottom: 15px; display: none;">
-                    <label for="serviceAccountFileInput" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">
-                        Service Account JSON 文件：
-                    </label>
-                    <div style="position: relative;">
-                        <input type="file" id="serviceAccountFileInput" accept=".json" 
-                               style="position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; z-index: 2;">
-                        <div id="serviceAccountUploadArea" 
-                             style="width: 100%; padding: 20px; border: 2px dashed #f44336; border-radius: 10px; background: #ffebee; text-align: center; cursor: pointer; transition: all 0.3s;">
-                            <p style="color: #f44336; font-weight: bold; font-size: 1.1em; margin: 0;">
-                                📁 請上傳 Service Account JSON 文件
-                            </p>
-                            <p style="color: #666; font-size: 0.9em; margin-top: 5px;">
-                                點擊此處選擇文件或拖放文件到此處
-                            </p>
-                            <p style="color: #999; font-size: 0.85em; margin-top: 5px;">
-                                例如：bank2sheets-484102-5586002c92b1.json
-                            </p>
-                        </div>
-                    </div>
-                    <p id="serviceAccountFileName" style="color: #4caf50; font-size: 0.9em; margin-top: 10px; display: none; font-weight: bold;">
-                        ✓ 已選擇文件：
-                    </p>
-                    <p id="serviceAccountStatus" style="color: #4caf50; font-size: 0.9em; margin-top: 5px; display: none;">
-                        ✓ Service Account 文件已加載
-                    </p>
-                </div>
                 <div style="margin-bottom: 15px;">
                     <label for="projectIdInput" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">
                         項目 ID（Project ID）：
@@ -383,10 +341,96 @@
 
     <!-- PDF.js 庫 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- jsrsasign 庫用於 Service Account JWT 簽名 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/11.0.0/jsrsasign-all-min.js"></script>
     <!-- SheetJS 庫 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Supabase 客戶端 -->
+    <script type="module">
+        import { supabase, signIn, signUp, signOut, initAuth } from './auth.js';
+        
+        // 將 supabase 客戶端暴露到全局，供 script.js 使用
+        window.supabase = supabase;
+        window.authFunctions = { signIn, signUp, signOut };
+        
+        // 確保登入區域在模塊載入時可見（如果未登入）
+        // 如果 auth.js 載入失敗，至少登入區域是可見的
+        const loginSection = document.getElementById('loginSection');
+        const userSection = document.getElementById('userSection');
+        if (loginSection && !userSection?.style.display) {
+            loginSection.style.display = 'block';
+        }
+        
+        // 初始化認證狀態（如果 auth.js 成功載入）
+        (async () => {
+            try {
+                await initAuth();
+            } catch (error) {
+                console.warn('⚠️ 無法初始化認證（可能因為使用 file:// 協議）:', error);
+                // 如果初始化失敗，確保登入區域可見
+                if (loginSection) loginSection.style.display = 'block';
+                if (userSection) userSection.style.display = 'none';
+            }
+        })();
+        
+        // 登入按鈕事件
+        document.getElementById('loginBtn')?.addEventListener('click', async () => {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const authStatus = document.getElementById('authStatus');
+            
+            if (!email || !password) {
+                authStatus.innerHTML = '<span style="color: #f44336;">請填寫電子郵件和密碼</span>';
+                return;
+            }
+            
+            authStatus.innerHTML = '<span style="color: #1976d2;">正在登入...</span>';
+            const { data, error } = await signIn(email, password);
+            
+            if (error) {
+                authStatus.innerHTML = `<span style="color: #f44336;">登入失敗：${error.message}</span>`;
+            } else {
+                authStatus.innerHTML = '<span style="color: #4caf50;">登入成功！</span>';
+                document.getElementById('loginEmail').value = '';
+                document.getElementById('loginPassword').value = '';
+            }
+        });
+        
+        // 註冊按鈕事件
+        document.getElementById('signupBtn')?.addEventListener('click', async () => {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const authStatus = document.getElementById('authStatus');
+            
+            if (!email || !password) {
+                authStatus.innerHTML = '<span style="color: #f44336;">請填寫電子郵件和密碼</span>';
+                return;
+            }
+            
+            if (password.length < 6) {
+                authStatus.innerHTML = '<span style="color: #f44336;">密碼長度至少需要 6 個字符</span>';
+                return;
+            }
+            
+            authStatus.innerHTML = '<span style="color: #1976d2;">正在註冊...</span>';
+            const { data, error } = await signUp(email, password);
+            
+            if (error) {
+                authStatus.innerHTML = `<span style="color: #f44336;">註冊失敗：${error.message}</span>`;
+            } else {
+                authStatus.innerHTML = '<span style="color: #4caf50;">註冊成功！請檢查您的電子郵件以確認帳戶。</span>';
+                document.getElementById('loginEmail').value = '';
+                document.getElementById('loginPassword').value = '';
+            }
+        });
+        
+        // 登出按鈕事件
+        document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+            const { error } = await signOut();
+            if (error) {
+                console.error('登出失敗:', error);
+            }
+        });
+    </script>
     
     <!-- 模板載入器（必須最先載入） -->
     <script src="template-loader.js"></script>
